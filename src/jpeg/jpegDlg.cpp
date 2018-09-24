@@ -101,13 +101,13 @@ HCURSOR CJpegDlg::OnQueryDragIcon()
 
 void CJpegDlg::OnBnClickedButton4()
 {
-    m_data.src.bmp.compress(m_data.jdst);
-    m_data.dst.bmp.decompress(m_data.jdst);
+    m_data.src.bmp.jpeg_compress(m_data.rdst);
+    m_data.dst.bmp.jpeg_decompress(m_data.rdst);
     m_data.dst.bmp.to_cbitmap(m_data.dst.cbmp);
     m_dstImg.RedrawWindow();
-    CString fmt; fmt.Format(TEXT("%d"), m_data.jdst.size());
+    CString fmt; fmt.Format(TEXT("%d"), m_data.rdst.size());
     m_dstSize.SetWindowText(fmt);
-    fmt.Format(TEXT("%lf"), (double) m_data.jdst.size() / m_data.src.bmp.size() * 100);
+    fmt.Format(TEXT("%lf"), (double) m_data.rdst.size() / m_data.src.bmp.size() * 100);
     m_ratio.SetWindowText(fmt);
 }
 
@@ -134,7 +134,7 @@ void CJpegDlg::OnBnClickedButton1()
 
 void CJpegDlg::OnBnClickedButton2()
 {
-    if (m_data.src.bmp.header.h == 0 || m_data.jdst.size() == 0) return;
+    if (m_data.src.bmp.header.h == 0 || m_data.rdst.size() == 0) return;
     CFileDialog fd(TRUE);
     if (fd.DoModal() == IDOK)
     {
@@ -148,9 +148,9 @@ void CJpegDlg::OnBnClickedButton2()
             f1.Write(&m_data.src.bmp.pixels[i][j], 3);
         }
 
-        for (size_t i = 0; i < m_data.jdst.data.size(); ++i)
+        for (size_t i = 0; i < m_data.rdst.data.size(); ++i)
         {
-            f2.Write(&m_data.jdst.data[i], 2);
+            f2.Write(&m_data.rdst.data[i], 2);
         }
 
         f1.Close();

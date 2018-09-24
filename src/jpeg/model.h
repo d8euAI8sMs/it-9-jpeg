@@ -22,10 +22,6 @@ namespace model
     {
         std::array < std::array < double, 8 >, 8 > m;
     };
-    struct m8b
-    {
-        std::array < std::array < byte_t, 8 >, 8 > m;
-    };
 
     struct img_header
     {
@@ -38,7 +34,7 @@ namespace model
         byte_t v;
     };
 
-    struct jpeg_data
+    struct rle_data
     {
         img_header header;
         std::vector < rle > data;
@@ -63,7 +59,7 @@ namespace model
         };
         static const double sqrt2tom1 = 0.70710678118654752440084436210485;
         static const double pi = 3.1415926535897932384626433832795;
-        static const m8b QY = { { {
+        static const m8 QY = { { {
             { { 16,  11,  10,  16,  24,  40,  51,  61  } },
             { { 12,  12,  14,  19,  26,  58,  60,  55  } },
             { { 14,  13,  16,  24,  40,  57,  69,  56  } },
@@ -73,7 +69,7 @@ namespace model
             { { 49,  64,  78,  87,  103, 121, 120, 101 } },
             { { 72,  92,  95,  98,  112, 100, 103, 99  } }
         } } };
-        static const m8b QC = { { {
+        static const m8 QC = { { {
             { { 17, 18, 24, 47, 99, 99, 99, 99 } },
             { { 18, 21, 26, 66, 99, 99, 99, 99 } },
             { { 24, 26, 56, 99, 99, 99, 99, 99 } },
@@ -123,7 +119,7 @@ namespace model
     /*                     util                          */
     /*****************************************************/
 
-    inline m8 costr(const m8b & s)
+    inline m8 & costr(m8 & s)
     {
         m8 n;
         for (size_t u = 0; u < 8; ++u)
@@ -137,12 +133,12 @@ namespace model
             }
             n.m[u][v] = uv;
         }
-        return n;
+        return (s = n);
     }
 
-    inline m8b costrr(const m8 & s)
+    inline m8 & costrr(m8 & s)
     {
-        m8b n;
+        m8 n;
         for (size_t u = 0; u < 8; ++u)
         for (size_t v = 0; v < 8; ++v)
         {
@@ -154,32 +150,30 @@ namespace model
             }
             n.m[u][v] = byte_t(min(255, max(0, uv)));
         }
-        return n;
+        return (s = n);
     }
 
-    inline m8b appq(const m8 & s, const m8b & q)
+    inline m8 & appq(m8 & s, const m8 & q)
     {
-        m8b n;
         for (size_t u = 0; u < 8; ++u)
         for (size_t v = 0; v < 8; ++v)
         {
-            n.m[u][v] = byte_t(min(255, max(0, s.m[u][v] / q.m[u][v])));
+            s.m[u][v] = byte_t(min(255, max(0, s.m[u][v] / q.m[u][v])));
         }
-        return n;
+        return s;
     }
 
-    inline m8 appqr(const m8b & s, const m8b & q)
+    inline m8 & appqr(m8 & s, const m8 & q)
     {
-        m8 n;
         for (size_t u = 0; u < 8; ++u)
         for (size_t v = 0; v < 8; ++v)
         {
-            n.m[u][v] = s.m[u][v] * q.m[u][v];
+            s.m[u][v] = s.m[u][v] * q.m[u][v];
         }
-        return n;
+        return s;
     }
 
-    inline void rle_encode(m8b & m, std::vector < rle > & rles)
+    inline void rle_encode(m8 & m, std::vector < rle > & rles)
     {
         rle cur = { 0, 0 };
         for (size_t i = 0; i < 64; ++i)
@@ -190,14 +184,14 @@ namespace model
                 if (cur.n != 0)
                     rles.push_back(cur);
                 cur.n = 1;
-                cur.v = m.m[uv.first][uv.second];
+                cur.v = byte_t(m.m[uv.first][uv.second]);
             }
             else ++cur.n;
         }
         if (cur.n != 0) rles.push_back(cur);
     }
 
-    inline void rle_decode(m8b & m, std::vector < rle > & rles)
+    inline void rle_decode(m8 & m, std::vector < rle > & rles)
     {
         rle cur = { 0, 0 };
         for (size_t i = 0; i < 64; ++i)
@@ -295,7 +289,7 @@ namespace model
             bmp.SetBitmapDimension(header.w, header.h);
         }
     public:
-        void compress(jpeg_data & d)
+        void jpeg_compress(rle_data & d)
         {
             d.header = header;
 
@@ -313,7 +307,7 @@ namespace model
                 rle_encode(appq(cr8, consts::QC), d.data);
             }
         }
-        void decompress(jpeg_data & d)
+        void jpeg_decompress(rle_data & d)
         {
             header = d.header;
             pixels.clear();
@@ -323,12 +317,12 @@ namespace model
 
             size_t n = (header.h + 7) / 8, m = (header.w + 7) / 8;
 
-            jpeg_data jd = d; // copy to leave `d` untouched
+            rle_data jd = d; // copy to leave `d` untouched
 
             for (size_t i = 0; i < n; ++i)
             for (size_t j = 0; j < m; ++j)
             {
-                std::array < m8b, 3 > m8bs;
+                std::array < m8, 3 > m8bs;
                 rle_decode(m8bs[2], jd.data);
                 rle_decode(m8bs[1], jd.data);
                 rle_decode(m8bs[0], jd.data);
@@ -340,9 +334,9 @@ namespace model
         }
         size_t size() const { return header.w * header.h * 3; /* without alpha */ }
     private:
-        std::array < m8b, 3 > m8bs_at(size_t i, size_t j)
+        std::array < m8, 3 > m8bs_at(size_t i, size_t j)
         {
-            std::array < m8b, 3 > ms;
+            std::array < m8, 3 > ms;
             size_t x = j * 8, y = i * 8;
             for (size_t a = 0; a < min(8, header.w - x); ++a)
             for (size_t b = 0; b < min(8, header.h - y); ++b)
@@ -368,15 +362,15 @@ namespace model
             }
             return ms;
         }
-        void m8bs_at(size_t i, size_t j, const std::array < m8b, 3 > & ms)
+        void m8bs_at(size_t i, size_t j, const std::array < m8, 3 > & ms)
         {
             size_t x = j * 8, y = i * 8;
             for (size_t a = 0; a < min(8, header.w - x); ++a)
             for (size_t b = 0; b < min(8, header.h - y); ++b)
             {
-                pixels[y + b][x + a].y  = ms[0].m[b][a];
-                pixels[y + b][x + a].cb = ms[1].m[b][a];
-                pixels[y + b][x + a].cr = ms[2].m[b][a];
+                pixels[y + b][x + a].y  = byte_t(ms[0].m[b][a]);
+                pixels[y + b][x + a].cb = byte_t(ms[1].m[b][a]);
+                pixels[y + b][x + a].cr = byte_t(ms[2].m[b][a]);
                 pixels[y + b][x + a].to_rgba();
             }
         }
@@ -396,7 +390,7 @@ namespace model
     {
         bmp_data src;
         bmp_data dst;
-        jpeg_data jdst;
+        rle_data rdst;
     };
 
     inline plot::drawable::ptr_t make_bmp_plot(bmp_data & b)
