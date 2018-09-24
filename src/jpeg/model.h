@@ -24,6 +24,8 @@ namespace model
         std::array < std::array < double, 8 >, 8 > m;
     };
 
+    enum class img_type { bmp, rle, huff, jpeg, jpeg_huff };
+
     struct img_header
     {
         size_t w, h;
@@ -369,7 +371,7 @@ namespace model
         huffman_data d = hd; // copy to not affect `hd`
         rd.header = hd.header;
         rd.data.clear();
-        while (hd.size_bits)
+        while (d.size_bits)
         {
             rd.data.emplace_back();
             rd.data.back().v = d.pop_symbol();

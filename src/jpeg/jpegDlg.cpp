@@ -7,6 +7,7 @@
 #include "afxdialogex.h"
 
 #include "CompareDialog.h"
+#include "ImgDialog.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -49,6 +50,11 @@ BEGIN_MESSAGE_MAP(CJpegDlg, CSimulationDialog)
     ON_BN_CLICKED(IDC_BUTTON5, &CJpegDlg::OnBnClickedButton5)
     ON_BN_CLICKED(IDC_BUTTON6, &CJpegDlg::OnBnClickedButton6)
     ON_BN_CLICKED(IDC_BUTTON7, &CJpegDlg::OnBnClickedButton7)
+    ON_BN_CLICKED(IDC_BUTTON8, &CJpegDlg::OnBnClickedButton8)
+    ON_BN_CLICKED(IDC_BUTTON9, &CJpegDlg::OnBnClickedButton9)
+    ON_BN_CLICKED(IDC_BUTTON10, &CJpegDlg::OnBnClickedButton10)
+    ON_BN_CLICKED(IDC_BUTTON11, &CJpegDlg::OnBnClickedButton11)
+    ON_BN_CLICKED(IDC_BUTTON12, &CJpegDlg::OnBnClickedButton12)
 END_MESSAGE_MAP()
 
 // CJpegDlg message handlers
@@ -147,28 +153,7 @@ void CJpegDlg::OnBnClickedButton1()
 
 void CJpegDlg::OnBnClickedButton2()
 {
-    if (m_data.src.bmp.header.h == 0 || m_data.rdst.size() == 0) return;
-    CFileDialog fd(TRUE);
-    if (fd.DoModal() == IDOK)
-    {
-        auto p = fd.GetPathName();
-        CFile f1(p + CString(".myjpeg"), CFile::modeWrite | CFile::modeCreate);
-        CFile f2(p + CString(".mybmp"), CFile::modeWrite | CFile::modeCreate);
-
-        for (size_t i = 0; i < m_data.src.bmp.header.h; ++i)
-        for (size_t j = 0; j < m_data.src.bmp.header.w; ++j)
-        {
-            f1.Write(&m_data.src.bmp.pixels[i][j], 3);
-        }
-
-        for (size_t i = 0; i < m_data.rdst.data.size(); ++i)
-        {
-            f2.Write(&m_data.rdst.data[i], 2);
-        }
-
-        f1.Close();
-        f2.Close();
-    }
+    SaveImg(model::img_type::bmp);
 }
 
 
@@ -220,4 +205,219 @@ void CJpegDlg::OnBnClickedButton7()
     m_dstSize[3].SetWindowText(fmt);
     fmt.Format(TEXT("%lf"), (double) (m_data.hsrc.size_bits + 7) / 8 / m_data.src.bmp.size() * 100);
     m_ratio[3].SetWindowText(fmt);
+}
+
+void CJpegDlg::SaveImg(model::img_type t)
+{
+    if (m_data.src.bmp.header.h == 0 || m_data.rdst.size() == 0 || m_data.hdst.size_bits == 0) return;
+
+    CString ext; model::byte_t flags; model::img_header header;
+    switch (t)
+    {
+    case model::img_type::bmp:       ext = "mybmp";  flags = 0; header = m_data.src.bmp.header; break;
+    case model::img_type::rle:       ext = "mybmp";  flags = 1; header = m_data.src.bmp.header; break;
+    case model::img_type::huff:      ext = "mybmp";  flags = 2; header = m_data.src.bmp.header; break;
+    case model::img_type::jpeg:      ext = "myjpeg"; flags = 0; header = m_data.dst.bmp.header; break;
+    case model::img_type::jpeg_huff: ext = "myjpeg"; flags = 2; header = m_data.dst.bmp.header; break;
+    default: return;
+    }
+
+    CFileDialog fd(FALSE, ext, TEXT("Untitled"));
+    if (fd.DoModal() == IDOK)
+    {
+        auto p = fd.GetPathName();
+
+        CFile f(p, CFile::modeWrite | CFile::modeCreate);
+
+        f.Write(&flags, 1);
+        f.Write(&header, sizeof(model::img_header));
+        
+        model::rle_data * rle = nullptr;
+        model::huffman_data * huff = nullptr;
+
+        switch (t)
+        {
+        case model::img_type::rle:  rle  = &m_data.rsrc;    break;
+        case model::img_type::huff: huff = &m_data.hsrc;    break;
+        case model::img_type::jpeg: rle  = &m_data.rdst;    break;
+        case model::img_type::jpeg_huff: huff = &m_data.hdst; break;
+        default: break;
+        }
+
+        size_t sz;
+
+        switch (t)
+        {
+        case model::img_type::bmp:
+            for (size_t i = 0; i < m_data.src.bmp.header.h; ++i)
+            for (size_t j = 0; j < m_data.src.bmp.header.w; ++j)
+            {
+                f.Write(&m_data.src.bmp.pixels[i][j], 3);
+            }
+            break;
+        case model::img_type::rle:
+        case model::img_type::jpeg:
+            sz = rle->data.size();
+            f.Write(&sz, sizeof(size_t));
+            f.Write(rle->data.data(), sizeof(model::rle) * sz);
+            break;
+        case model::img_type::huff:
+        case model::img_type::jpeg_huff:
+            sz = huff->table.index.size();
+            f.Write(&sz, sizeof(size_t));
+            for each (auto & p in huff->table.index)
+            {
+                f.Write(&p.first, 1);
+                f.Write(&p.second, sizeof(model::huffman_code));
+            }
+            sz = huff->size_bits;
+            f.Write(&sz, sizeof(size_t));
+            f.Write(huff->data.data(), (sz + 7) / 8);
+            break;
+        default: break;
+        }
+
+        f.Close();
+    }
+}
+
+std::unique_ptr < CBitmap > CJpegDlg::LoadImg()
+{
+    CString ext; model::img_type t; model::byte_t flags; model::img_header header;
+
+    CFileDialog fd(TRUE, ext, TEXT("Untitled"));
+    if (fd.DoModal() == IDOK)
+    {
+        auto p = fd.GetPathName();
+        ext = fd.GetFileExt();
+
+        CFile f(p, CFile::modeRead);
+
+        f.Read(&flags, 1);
+        f.Read(&header, sizeof(model::img_header));
+        
+        if (ext == CString("mybmp"))
+        {
+            if (flags == 0) t = model::img_type::bmp;
+            else if (flags == 1) t = model::img_type::rle;
+            else if (flags == 2) t = model::img_type::huff;
+            else return {};
+        }
+        else if (ext == CString("myjpeg"))
+        {
+            if (flags == 0) t = model::img_type::jpeg;
+            else if (flags == 2) t = model::img_type::jpeg_huff;
+            else return {};
+        }
+        else return {};
+
+        switch (t)
+        {
+        case model::img_type::bmp:
+        {
+            model::bitmap bmp;
+            bmp.header = header;
+            bmp.pixels.resize(header.h);
+            for (size_t i = 0; i < header.h; ++i)
+            {
+                bmp.pixels[i].resize(header.w);
+                for (size_t j = 0; j < header.w; ++j)
+                {
+                    f.Read(&bmp.pixels[i][j], 3);
+                }
+            }
+            auto r = std::make_unique < CBitmap > ();
+            bmp.to_cbitmap(*r);
+
+            f.Close();
+            return r;
+        }
+        case model::img_type::rle:
+        case model::img_type::jpeg:
+        {
+            model::rle_data rle;
+            rle.header = header;
+            size_t sz;
+            f.Read(&sz, sizeof(size_t));
+            rle.data.resize(sz);
+            f.Read(rle.data.data(), sz * sizeof(model::rle));
+            auto r = std::make_unique < CBitmap > ();
+            model::bitmap bmp;
+            if (t == model::img_type::rle)
+                bmp.rle_decompress(rle);
+            else bmp.jpeg_decompress(rle);
+            bmp.to_cbitmap(*r);
+
+            f.Close();
+            return r;
+        }
+        case model::img_type::huff:
+        case model::img_type::jpeg_huff:
+        {
+            model::huffman_data huff;
+            huff.header = header;
+            size_t sz;
+            f.Read(&sz, sizeof(size_t));
+            huff.table.min_bits = 0xff;
+            for (size_t i = 0; i < sz; ++i)
+            {
+                model::byte_t c; model::huffman_code hc;
+                f.Read(&c, 1); f.Read(&hc, sizeof(model::huffman_code));
+                huff.table.min_bits = min(huff.table.min_bits, hc.bits);
+                huff.table.index.emplace(c, hc);
+                huff.table.rev_index.emplace(hc, c);
+            }
+            f.Read(&sz, sizeof(size_t));
+            huff.size_bits = sz;
+            huff.data.resize((sz + 7) / 8);
+            f.Read(huff.data.data(), (sz + 7) / 8);
+            model::rle_data rle;
+            model::huffman_decompress(huff, rle);
+            auto r = std::make_unique < CBitmap > ();
+            model::bitmap bmp;
+            if (t == model::img_type::huff)
+                bmp.rle_decompress(rle);
+            else bmp.jpeg_decompress(rle);
+            bmp.to_cbitmap(*r);
+
+            f.Close();
+            return r;
+        }
+        default:
+            break;
+        }
+    }
+    return {};
+}
+
+
+void CJpegDlg::OnBnClickedButton8()
+{
+    SaveImg(model::img_type::jpeg);
+}
+
+
+void CJpegDlg::OnBnClickedButton9()
+{
+    SaveImg(model::img_type::rle);
+}
+
+
+void CJpegDlg::OnBnClickedButton10()
+{
+    SaveImg(model::img_type::jpeg_huff);
+}
+
+
+void CJpegDlg::OnBnClickedButton11()
+{
+    SaveImg(model::img_type::huff);
+}
+
+
+void CJpegDlg::OnBnClickedButton12()
+{
+    auto r = LoadImg();
+    CImgDialog d(this, r.get());
+    d.DoModal();
 }

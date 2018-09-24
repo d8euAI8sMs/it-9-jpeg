@@ -104,6 +104,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CompareDialog.h" />
+    <ClInclude Include="ImgDialog.h" />
     <ClInclude Include="jpeg.h" />
     <ClInclude Include="jpegDlg.h" />
     <ClInclude Include="model.h" />
@@ -113,6 +114,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CompareDialog.cpp" />
+    <ClCompile Include="ImgDialog.cpp" />
     <ClCompile Include="jpeg.cpp" />
     <ClCompile Include="jpegDlg.cpp" />
     <ClCompile Include="stdafx.cpp">
