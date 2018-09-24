@@ -25,9 +25,18 @@ void CJpegDlg::DoDataExchange(CDataExchange* pDX)
     CSimulationDialog::DoDataExchange(pDX);
     DDX_Control(pDX, IDC_SRC, m_srcImg);
     DDX_Control(pDX, IDC_DST, m_dstImg);
-    DDX_Control(pDX, IDC_EDIT1, m_srcSize);
-    DDX_Control(pDX, IDC_EDIT2, m_dstSize);
-    DDX_Control(pDX, IDC_EDIT3, m_ratio);
+    DDX_Control(pDX, IDC_EDIT1, m_srcSize[0]);
+    DDX_Control(pDX, IDC_EDIT2, m_dstSize[0]);
+    DDX_Control(pDX, IDC_EDIT3, m_ratio[0]);
+    DDX_Control(pDX, IDC_EDIT4, m_srcSize[1]);
+    DDX_Control(pDX, IDC_EDIT9, m_dstSize[1]);
+    DDX_Control(pDX, IDC_EDIT5, m_ratio[1]);
+    DDX_Control(pDX, IDC_EDIT7, m_srcSize[2]);
+    DDX_Control(pDX, IDC_EDIT6, m_dstSize[2]);
+    DDX_Control(pDX, IDC_EDIT8, m_ratio[2]);
+    DDX_Control(pDX, IDC_EDIT10, m_srcSize[3]);
+    DDX_Control(pDX, IDC_EDIT12, m_dstSize[3]);
+    DDX_Control(pDX, IDC_EDIT11, m_ratio[3]);
 }
 
 BEGIN_MESSAGE_MAP(CJpegDlg, CSimulationDialog)
@@ -39,6 +48,7 @@ BEGIN_MESSAGE_MAP(CJpegDlg, CSimulationDialog)
     ON_BN_CLICKED(IDC_BUTTON3, &CJpegDlg::OnBnClickedButton3)
     ON_BN_CLICKED(IDC_BUTTON5, &CJpegDlg::OnBnClickedButton5)
     ON_BN_CLICKED(IDC_BUTTON6, &CJpegDlg::OnBnClickedButton6)
+    ON_BN_CLICKED(IDC_BUTTON7, &CJpegDlg::OnBnClickedButton7)
 END_MESSAGE_MAP()
 
 // CJpegDlg message handlers
@@ -106,9 +116,9 @@ void CJpegDlg::OnBnClickedButton4()
     m_data.dst.bmp.to_cbitmap(m_data.dst.cbmp);
     m_dstImg.RedrawWindow();
     CString fmt; fmt.Format(TEXT("%d"), m_data.rdst.size());
-    m_dstSize.SetWindowText(fmt);
+    m_dstSize[0].SetWindowText(fmt);
     fmt.Format(TEXT("%lf"), (double) m_data.rdst.size() / m_data.src.bmp.size() * 100);
-    m_ratio.SetWindowText(fmt);
+    m_ratio[0].SetWindowText(fmt);
 }
 
 
@@ -125,7 +135,10 @@ void CJpegDlg::OnBnClickedButton1()
         m_data.src.bmp.from_cbitmap(m_data.src.cbmp);
         m_srcImg.RedrawWindow();
         CString fmt; fmt.Format(TEXT("%d"), m_data.src.bmp.size());
-        m_srcSize.SetWindowText(fmt);
+        m_srcSize[0].SetWindowText(fmt);
+        m_srcSize[1].SetWindowText(fmt);
+        m_srcSize[2].SetWindowText(fmt);
+        m_srcSize[3].SetWindowText(fmt);
         
         OnBnClickedButton4();
     }
@@ -177,4 +190,16 @@ void CJpegDlg::OnBnClickedButton6()
 {
     CCompareDialog cd(this, &m_data, 4);
     cd.DoModal();
+}
+
+
+void CJpegDlg::OnBnClickedButton7()
+{
+    if (m_data.src.bmp.header.h == 0) return;
+    if (m_data.dst.bmp.header.h == 0) return;
+    m_data.src.bmp.rle_compress(m_data.rsrc);
+    CString fmt; fmt.Format(TEXT("%d"), m_data.rsrc.size());
+    m_dstSize[1].SetWindowText(fmt);
+    fmt.Format(TEXT("%lf"), (double) m_data.rsrc.size() / m_data.src.bmp.size() * 100);
+    m_ratio[1].SetWindowText(fmt);
 }

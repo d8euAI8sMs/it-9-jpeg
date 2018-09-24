@@ -253,6 +253,8 @@ namespace model
         {
             color_t n; n.c = (a << 24) | (r << 16) | (g << 8) | b; return n;
         }
+
+        byte_t operator[] (size_t i) const { return (c >> (i * 8)) & 0xff; }
     };
 
     class bitmap
@@ -332,6 +334,56 @@ namespace model
                 m8bs_at(n - i - 1, m - j - 1, {{ y8, cb8, cr8 }});
             }
         }
+        void rle_compress(rle_data & d)
+        {
+            d.header = header;
+            rle cur = { 0, 0 };
+            for (size_t c = 0; c < 3; ++c)
+            {
+                cur = { 0, 0 };
+                for (size_t i = 0; i < header.h; ++i){
+                for (size_t j = 0; j < header.w; ++j)
+                {
+                    size_t y = i, x = (i & 1) ? (header.w - j - 1) : j;
+                    if (cur.v != pixels[y][x][c] || cur.n == 0xff)
+                    {
+                        if (cur.n != 0)
+                            d.data.push_back(cur);
+                        cur.n = 1;
+                        cur.v = pixels[y][x][c];
+                    }
+                    else ++cur.n;
+                }}
+                if (cur.n != 0) d.data.push_back(cur);
+            }
+        }
+        void rle_decompress(rle_data & _d)
+        {
+            header = _d.header;
+            pixels.clear();
+            pixels.resize(header.h);
+            for (size_t i = 0; i < header.h; ++i)
+                pixels[i].resize(header.w);
+
+            rle_data d = _d;
+
+            rle cur = { 0, 0 };
+            for (size_t c = 0; c < 3; ++c)
+            {
+                for (size_t i = 0; i < header.h; ++i)
+                for (size_t j = 0; j < header.w; ++j)
+                {
+                    size_t y = header.h - i - 1, x = (i & 1) ? j : (header.w - j - 1);
+                    if (cur.n == 0)
+                    {
+                        cur = d.data.back();
+                        d.data.pop_back();
+                    }
+                    pixels[y][x].c |= cur.v << ((2 - c) * 8);
+                    --cur.n;
+                }
+            }
+        }
         size_t size() const { return header.w * header.h * 3; /* without alpha */ }
     private:
         std::array < m8, 3 > m8bs_at(size_t i, size_t j)
@@ -390,6 +442,7 @@ namespace model
     {
         bmp_data src;
         bmp_data dst;
+        rle_data rsrc;
         rle_data rdst;
     };
 

@@ -33,9 +33,9 @@ protected:
 public:
     CPlotControl m_srcImg;
     CPlotControl m_dstImg;
-    CEdit m_srcSize;
-    CEdit m_dstSize;
-    CEdit m_ratio;
+    CEdit m_srcSize[4];
+    CEdit m_dstSize[4];
+    CEdit m_ratio[4];
     model::model_data m_data;
     afx_msg void OnBnClickedButton4();
     afx_msg void OnBnClickedButton1();
@@ -43,4 +43,5 @@ public:
     afx_msg void OnBnClickedButton3();
     afx_msg void OnBnClickedButton5();
     afx_msg void OnBnClickedButton6();
+    afx_msg void OnBnClickedButton7();
 };
