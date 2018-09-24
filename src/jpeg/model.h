@@ -17,6 +17,7 @@ namespace model
 {
 
     using byte_t = std::uint8_t;
+    using sbyte_t = std::int8_t;
     using pixel_t = std::uint32_t;
 
     struct m8
@@ -255,7 +256,7 @@ namespace model
         for (size_t u = 0; u < 8; ++u)
         for (size_t v = 0; v < 8; ++v)
         {
-            s.m[u][v] = byte_t(min(255, max(0, s.m[u][v] / q.m[u][v])));
+            s.m[u][v] = byte_t((sbyte_t)min(127, max(-127, s.m[u][v] / q.m[u][v])));
         }
         return s;
     }
@@ -265,7 +266,7 @@ namespace model
         for (size_t u = 0; u < 8; ++u)
         for (size_t v = 0; v < 8; ++v)
         {
-            s.m[u][v] = s.m[u][v] * q.m[u][v];
+            s.m[u][v] = ((sbyte_t)byte_t(s.m[u][v])) * q.m[u][v];
         }
         return s;
     }
