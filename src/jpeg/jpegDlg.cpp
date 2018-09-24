@@ -197,9 +197,27 @@ void CJpegDlg::OnBnClickedButton7()
 {
     if (m_data.src.bmp.header.h == 0) return;
     if (m_data.dst.bmp.header.h == 0) return;
+
     m_data.src.bmp.rle_compress(m_data.rsrc);
+
+    model::make_huffman_table(m_data.hsrc.table, model::get_rle_stat(m_data.rsrc));
+    model::make_huffman_table(m_data.hdst.table, model::get_rle_stat(m_data.rdst));
+
+    model::huffman_compress(m_data.hsrc, m_data.rsrc);
+    model::huffman_compress(m_data.hdst, m_data.rdst);
+
     CString fmt; fmt.Format(TEXT("%d"), m_data.rsrc.size());
     m_dstSize[1].SetWindowText(fmt);
     fmt.Format(TEXT("%lf"), (double) m_data.rsrc.size() / m_data.src.bmp.size() * 100);
     m_ratio[1].SetWindowText(fmt);
+
+    fmt.Format(TEXT("%d"), (m_data.hdst.size_bits + 7) / 8);
+    m_dstSize[2].SetWindowText(fmt);
+    fmt.Format(TEXT("%lf"), (double) (m_data.hdst.size_bits + 7) / 8 / m_data.src.bmp.size() * 100);
+    m_ratio[2].SetWindowText(fmt);
+
+    fmt.Format(TEXT("%d"), (m_data.hsrc.size_bits + 7) / 8);
+    m_dstSize[3].SetWindowText(fmt);
+    fmt.Format(TEXT("%lf"), (double) (m_data.hsrc.size_bits + 7) / 8 / m_data.src.bmp.size() * 100);
+    m_ratio[3].SetWindowText(fmt);
 }

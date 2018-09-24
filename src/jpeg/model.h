@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <vector>
 #include <map>
+#include <set>
 #include <array>
 
 #include <omp.h>
@@ -39,6 +40,100 @@ namespace model
         img_header header;
         std::vector < rle > data;
         size_t size() const { return data.size() * 2; }
+    };
+
+    struct huffman_code
+    {
+        size_t code;
+        byte_t bits;
+
+        bool operator == (const huffman_code & o) const
+        {
+            return (code == o.code) && (bits == o.bits);
+        }
+        bool operator != (const huffman_code & o) const
+        {
+            return (code != o.code) || (bits != o.bits);
+        }
+        bool operator < (const huffman_code & o) const
+        {
+            return (bits < o.bits) || (bits == o.bits) && (code < o.code);
+        }
+    };
+
+    struct huffman_table
+    {
+        std::map < byte_t, huffman_code > index;
+        std::map < huffman_code, byte_t > rev_index;
+        size_t min_bits;
+
+        void clear()
+        {
+            index.clear();
+            rev_index.clear();
+            min_bits = 0;
+        }
+    };
+
+    struct huffman_data
+    {
+        img_header header;
+
+        huffman_table table;
+
+        size_t size_bits;
+        std::vector < byte_t > data;
+
+        void clear()
+        {
+            data.clear();
+            size_bits = 0;
+        }
+        void put_symbol(byte_t s)
+        {
+            put_bits(table.index[s]);
+        }
+        byte_t pop_symbol()
+        {
+            size_t code = 0, len = table.min_bits;
+            for (size_t i = 1; i < table.min_bits; ++i)
+                code = (code << 1) | pop_bit();
+            for (;;)
+            {
+                code = (code << 1) | pop_bit();
+                auto it = table.rev_index.find({ code, len });
+                if (it != std::end(table.rev_index))
+                {
+                    return it->second;
+                }
+                ++len;
+            }
+        }
+        void put_bits(huffman_code bits)
+        {
+            data.resize((size_bits + 7) / 8 + 4);
+            for (size_t i = 0; i < bits.bits; ++i)
+            {
+                put_bit(bits.code & 1);
+                bits.code >>= 1;
+            }
+        }
+        void put_bit(byte_t v)
+        {
+            if (v)
+            {
+                size_t defect = 8 - (size_bits % 8) - 1;
+                data[size_bits / 8] |= (v << defect);
+            }
+            ++size_bits;
+        }
+        byte_t pop_bit()
+        {
+            --size_bits;
+            size_t defect = 8 - (size_bits % 8) - 1;
+            byte_t t = (data[size_bits / 8] & (1 << defect)) >> defect;
+            return t;
+        }
     };
 
     /*****************************************************/
@@ -207,6 +302,82 @@ namespace model
         }
     }
 
+    inline void make_huffman_table(huffman_table & tbl, std::map < byte_t, size_t > w)
+    {
+        struct tree { tree *l; tree *r; tree *p; bool leaf; byte_t b; size_t v; };
+        auto cmp = [] (tree * t1, tree * t2) { return t1->v > t2->v; };
+        std::vector < tree * > trees;
+        std::vector < tree * > list;
+        for each (auto & p in w)
+            list.push_back(new tree { nullptr, nullptr, nullptr, true, p.first, p.second });
+        while (list.size() != 1)
+        {
+            std::sort(std::begin(list), std::end(list), cmp);
+            tree * t1 = *list.rbegin(); list.resize(list.size() - 1);
+            tree * t2 = *list.rbegin(); list.resize(list.size() - 1);
+            tree * t3 = new tree{ t1->p > t2->p ? t1 : t2, t1->p > t2->p ? t2 : t1, nullptr, false, 0, t1->v + t2->v };
+            t1->p = t3; t2->p = t3;
+            trees.push_back(t1); trees.push_back(t2);
+            list.push_back(t3);
+        }
+        trees.push_back(list.back());
+        tbl.clear();
+        tbl.min_bits = 0xff;
+        for (size_t i = 0; i < trees.size(); ++i)
+        {
+            if (!trees[i]->leaf) continue;
+            size_t code = 0;
+            tree * t = trees[i];
+            byte_t b = t->b;
+            size_t d = 0;
+            while (t->p)
+            {
+                if (t->p->l == t) code |= 1 << d;
+                ++d;
+                t = t->p;
+            }
+            tbl.index.emplace(b, huffman_code { code, d });
+            tbl.rev_index.emplace(huffman_code { code, d }, b);
+            tbl.min_bits = min(tbl.min_bits, d);
+        }
+    }
+
+    inline std::map < byte_t, size_t > get_rle_stat(rle_data & d)
+    {
+        std::map < byte_t, size_t > stat;
+        for (size_t i = 0; i < d.data.size(); ++i)
+        {
+            ++stat[d.data[i].n];
+            ++stat[d.data[i].v];
+        }
+        return stat;
+    }
+
+    inline void huffman_compress(huffman_data & hd, rle_data & rd)
+    {
+        hd.header = rd.header;
+        hd.clear();
+        for (size_t i = 0; i < rd.data.size(); ++i)
+        {
+            hd.put_symbol(rd.data[i].n);
+            hd.put_symbol(rd.data[i].v);
+        }
+    }
+
+    inline void huffman_decompress(huffman_data & hd, rle_data & rd)
+    {
+        huffman_data d = hd; // copy to not affect `hd`
+        rd.header = hd.header;
+        rd.data.clear();
+        while (hd.size_bits)
+        {
+            rd.data.emplace_back();
+            rd.data.back().v = d.pop_symbol();
+            rd.data.back().n = d.pop_symbol();
+        }
+        std::reverse(std::begin(rd.data), std::end(rd.data));
+    }
+
     /*****************************************************/
     /*                     data                          */
     /*****************************************************/
@@ -295,6 +466,8 @@ namespace model
         {
             d.header = header;
 
+            d.data.clear();
+
             size_t n = (header.h + 7) / 8, m = (header.w + 7) / 8;
 
             for (size_t i = 0; i < n; ++i)
@@ -337,6 +510,7 @@ namespace model
         void rle_compress(rle_data & d)
         {
             d.header = header;
+            d.data.clear();
             rle cur = { 0, 0 };
             for (size_t c = 0; c < 3; ++c)
             {
@@ -444,6 +618,8 @@ namespace model
         bmp_data dst;
         rle_data rsrc;
         rle_data rdst;
+        huffman_data hsrc;
+        huffman_data hdst;
     };
 
     inline plot::drawable::ptr_t make_bmp_plot(bmp_data & b)
