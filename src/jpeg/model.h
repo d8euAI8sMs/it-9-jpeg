@@ -183,8 +183,8 @@ namespace model
 
     namespace globs
     {
-        static std::array < std::array < double, 8 >, 8 > costf;
-        static std::array < std::pair < size_t, size_t >, 64 > zigzag;
+        extern std::array < std::array < double, 8 >, 8 > costf;
+        extern std::array < std::pair < size_t, size_t >, 64 > zigzag;
         inline void init()
         {
             for (size_t i = 0; i < 8; ++i)
@@ -656,5 +656,73 @@ namespace model
                           vp.screen.width(), vp.screen.height(),
                           &memDC, 0, 0, wh.cx, wh.cy, SRCCOPY);
         });
+    }
+
+    using points_t = std::vector < geom::point2d_t > ;
+
+    struct plot_data
+    {
+        util::ptr_t < points_t > data;
+        plot::list_drawable < points_t > :: ptr_t plot;
+    };
+
+    struct plot_config
+    {
+        plot::world_t::ptr_t world;
+        plot::auto_viewport < points_t > :: ptr_t autoworld;
+    };
+
+    inline plot_data make_plot_data
+    (
+        plot::palette::pen_ptr pen = plot::palette::pen(0xffffff),
+        plot::list_data_format data_format = plot::list_data_format::chain
+    )
+    {
+        plot_data pd;
+        pd.data = util::create < points_t > ();
+        pd.plot = plot::list_drawable < points_t > :: create
+        (
+            plot::make_data_source(pd.data),
+            nullptr, // no point painter
+            pen
+        );
+        pd.plot->data_format = data_format;
+        return pd;
+    }
+
+    inline plot::drawable::ptr_t make_root_drawable
+    (
+        const plot_config & p,
+        std::vector < plot::drawable::ptr_t > layers
+    )
+    {
+        using namespace plot;
+
+        return viewporter::create(
+            tick_drawable::create(
+                layer_drawable::create(layers),
+                const_n_tick_factory<axe::x>::create(
+                    make_simple_tick_formatter(6, 8),
+                    0,
+                    5
+                ),
+                const_n_tick_factory<axe::y>::create(
+                    make_simple_tick_formatter(6, 8),
+                    0,
+                    5
+                ),
+                palette::pen(RGB(80, 80, 80)),
+                RGB(200, 200, 200)
+            ),
+            make_viewport_mapper(make_world_mapper < points_t > (p.autoworld))
+        );
+    }
+
+    inline plot_config make_plot_config()
+    {
+        plot_config cfg;
+        cfg.world = plot::world_t::create();
+        cfg.autoworld = plot::min_max_auto_viewport < points_t > :: create();
+        return cfg;
     }
 }

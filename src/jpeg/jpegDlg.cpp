@@ -8,6 +8,7 @@
 
 #include "CompareDialog.h"
 #include "ImgDialog.h"
+#include "AnalyzingDialog.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -177,7 +178,7 @@ void CJpegDlg::OnBnClickedButton6()
 }
 
 
-void CJpegDlg::OnBnClickedButton7()
+void CJpegDlg::AnalyzeAndCompare()
 {
     if (m_data.src.bmp.header.h == 0) return;
     if (m_data.dst.bmp.header.h == 0) return;
@@ -459,4 +460,12 @@ void CJpegDlg::CompressImg(double q)
 
     fmt.Format(TEXT("%lf"), std::sqrt(dist));
     m_msqDistance.SetWindowText(fmt);
+
+    AnalyzeAndCompare();
+}
+
+void CJpegDlg::OnBnClickedButton7()
+{
+    CAnalyzingDialog d(this, &m_data.src.bmp);
+    d.DoModal();
 }

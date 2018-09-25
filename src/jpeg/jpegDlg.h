@@ -46,6 +46,7 @@ public:
     afx_msg void OnBnClickedButton5();
     afx_msg void OnBnClickedButton6();
     afx_msg void OnBnClickedButton7();
+    void AnalyzeAndCompare();
     void CompressImg(double q);
     void SaveImg(model::img_type t);
     std::unique_ptr < CBitmap > LoadImg();
