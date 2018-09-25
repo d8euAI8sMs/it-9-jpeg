@@ -36,6 +36,8 @@ public:
     CEdit m_srcSize[4];
     CEdit m_dstSize[4];
     CEdit m_ratio[4];
+    CEdit m_msqDistance;
+    CSliderCtrl m_quality;
     model::model_data m_data;
     afx_msg void OnBnClickedButton4();
     afx_msg void OnBnClickedButton1();
@@ -44,6 +46,7 @@ public:
     afx_msg void OnBnClickedButton5();
     afx_msg void OnBnClickedButton6();
     afx_msg void OnBnClickedButton7();
+    void CompressImg(double q);
     void SaveImg(model::img_type t);
     std::unique_ptr < CBitmap > LoadImg();
     afx_msg void OnBnClickedButton8();
@@ -51,4 +54,5 @@ public:
     afx_msg void OnBnClickedButton10();
     afx_msg void OnBnClickedButton11();
     afx_msg void OnBnClickedButton12();
+    afx_msg void OnHScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar);
 };

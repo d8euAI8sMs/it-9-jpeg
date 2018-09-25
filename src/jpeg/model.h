@@ -45,6 +45,8 @@ namespace model
         size_t size() const { return data.size() * 2; }
     };
 
+    struct jpeg_data : public rle_data { double quality; };
+
     struct huffman_code
     {
         size_t code;
@@ -216,6 +218,15 @@ namespace model
     /*****************************************************/
     /*                     util                          */
     /*****************************************************/
+
+    inline m8 make_quality_matrix(const m8 & src, double q, double k = 200)
+    {
+        m8 r;
+        for (size_t i = 0; i < 8; ++i)
+        for (size_t j = 0; j < 8; ++j)
+            r.m[i][j] = src.m[i][j] * (1 + k * (1 - 2 * q) * (i + j) / 14);
+        return r;
+    }
 
     inline m8 & costr(m8 & s)
     {
@@ -465,11 +476,15 @@ namespace model
             bmp.SetBitmapDimension(header.w, header.h);
         }
     public:
-        void jpeg_compress(rle_data & d)
+        void jpeg_compress(jpeg_data & d, double q = 0.5)
         {
             d.header = header;
+            d.quality = q;
 
             d.data.clear();
+
+            auto qy = make_quality_matrix(consts::QY, q);
+            auto qc = make_quality_matrix(consts::QC, q);
 
             size_t n = (header.h + 7) / 8, m = (header.w + 7) / 8;
 
@@ -480,18 +495,21 @@ namespace model
                 auto y8  = costr(m8bs[0]);
                 auto cb8 = costr(m8bs[1]);
                 auto cr8 = costr(m8bs[2]);
-                rle_encode(appq(y8,  consts::QY), d.data);
-                rle_encode(appq(cb8, consts::QC), d.data);
-                rle_encode(appq(cr8, consts::QC), d.data);
+                rle_encode(appq(y8,  qy), d.data);
+                rle_encode(appq(cb8, qc), d.data);
+                rle_encode(appq(cr8, qc), d.data);
             }
         }
-        void jpeg_decompress(rle_data & d)
+        void jpeg_decompress(jpeg_data & d)
         {
             header = d.header;
             pixels.clear();
             pixels.resize(header.h);
             for (size_t i = 0; i < header.h; ++i)
                 pixels[i].resize(header.w);
+
+            auto qy = make_quality_matrix(consts::QY, d.quality);
+            auto qc = make_quality_matrix(consts::QC, d.quality);
 
             size_t n = (header.h + 7) / 8, m = (header.w + 7) / 8;
 
@@ -504,9 +522,9 @@ namespace model
                 rle_decode(m8bs[2], jd.data);
                 rle_decode(m8bs[1], jd.data);
                 rle_decode(m8bs[0], jd.data);
-                auto y8  = costrr(appqr(m8bs[0], consts::QY));
-                auto cb8 = costrr(appqr(m8bs[1], consts::QC));
-                auto cr8 = costrr(appqr(m8bs[2], consts::QC));
+                auto y8  = costrr(appqr(m8bs[0], qy));
+                auto cb8 = costrr(appqr(m8bs[1], qc));
+                auto cr8 = costrr(appqr(m8bs[2], qc));
                 m8bs_at(n - i - 1, m - j - 1, {{ y8, cb8, cr8 }});
             }
         }
@@ -620,7 +638,7 @@ namespace model
         bmp_data src;
         bmp_data dst;
         rle_data rsrc;
-        rle_data rdst;
+        jpeg_data rdst;
         huffman_data hsrc;
         huffman_data hdst;
     };

@@ -38,6 +38,8 @@ void CJpegDlg::DoDataExchange(CDataExchange* pDX)
     DDX_Control(pDX, IDC_EDIT10, m_srcSize[3]);
     DDX_Control(pDX, IDC_EDIT12, m_dstSize[3]);
     DDX_Control(pDX, IDC_EDIT11, m_ratio[3]);
+    DDX_Control(pDX, IDC_SLIDER1, m_quality);
+    DDX_Control(pDX, IDC_EDIT13, m_msqDistance);
 }
 
 BEGIN_MESSAGE_MAP(CJpegDlg, CSimulationDialog)
@@ -55,6 +57,7 @@ BEGIN_MESSAGE_MAP(CJpegDlg, CSimulationDialog)
     ON_BN_CLICKED(IDC_BUTTON10, &CJpegDlg::OnBnClickedButton10)
     ON_BN_CLICKED(IDC_BUTTON11, &CJpegDlg::OnBnClickedButton11)
     ON_BN_CLICKED(IDC_BUTTON12, &CJpegDlg::OnBnClickedButton12)
+    ON_WM_HSCROLL()
 END_MESSAGE_MAP()
 
 // CJpegDlg message handlers
@@ -74,6 +77,9 @@ BOOL CJpegDlg::OnInitDialog()
 
     m_srcImg.plot_layer.with(model::make_bmp_plot(m_data.src));
     m_dstImg.plot_layer.with(model::make_bmp_plot(m_data.dst));
+    
+    m_quality.SetRange(0, 50, TRUE);
+    m_quality.SetPos(50);
 
     return TRUE;  // return TRUE  unless you set the focus to a control
 }
@@ -117,14 +123,7 @@ HCURSOR CJpegDlg::OnQueryDragIcon()
 
 void CJpegDlg::OnBnClickedButton4()
 {
-    m_data.src.bmp.jpeg_compress(m_data.rdst);
-    m_data.dst.bmp.jpeg_decompress(m_data.rdst);
-    m_data.dst.bmp.to_cbitmap(m_data.dst.cbmp);
-    m_dstImg.RedrawWindow();
-    CString fmt; fmt.Format(TEXT("%d"), m_data.rdst.size());
-    m_dstSize[0].SetWindowText(fmt);
-    fmt.Format(TEXT("%lf"), (double) m_data.rdst.size() / m_data.src.bmp.size() * 100);
-    m_ratio[0].SetWindowText(fmt);
+    CompressImg(m_quality.GetPos() / 100.);
 }
 
 
@@ -211,14 +210,14 @@ void CJpegDlg::SaveImg(model::img_type t)
 {
     if (m_data.src.bmp.header.h == 0 || m_data.rdst.size() == 0 || m_data.hdst.size_bits == 0) return;
 
-    CString ext; model::byte_t flags; model::img_header header;
+    CString ext; model::byte_t flags; model::img_header header; double jpeg_q;
     switch (t)
     {
     case model::img_type::bmp:       ext = "mybmp";  flags = 0; header = m_data.src.bmp.header; break;
     case model::img_type::rle:       ext = "mybmp";  flags = 1; header = m_data.src.bmp.header; break;
     case model::img_type::huff:      ext = "mybmp";  flags = 2; header = m_data.src.bmp.header; break;
-    case model::img_type::jpeg:      ext = "myjpeg"; flags = 0; header = m_data.dst.bmp.header; break;
-    case model::img_type::jpeg_huff: ext = "myjpeg"; flags = 2; header = m_data.dst.bmp.header; break;
+    case model::img_type::jpeg:      ext = "myjpeg"; flags = 0; header = m_data.dst.bmp.header; jpeg_q = m_data.rdst.quality; break;
+    case model::img_type::jpeg_huff: ext = "myjpeg"; flags = 2; header = m_data.dst.bmp.header; jpeg_q = m_data.rdst.quality; break;
     default: return;
     }
 
@@ -257,12 +256,14 @@ void CJpegDlg::SaveImg(model::img_type t)
             break;
         case model::img_type::rle:
         case model::img_type::jpeg:
+            if (t == model::img_type::jpeg) f.Write(&jpeg_q, sizeof(double));
             sz = rle->data.size();
             f.Write(&sz, sizeof(size_t));
             f.Write(rle->data.data(), sizeof(model::rle) * sz);
             break;
         case model::img_type::huff:
         case model::img_type::jpeg_huff:
+            if (t == model::img_type::jpeg_huff) f.Write(&jpeg_q, sizeof(double));
             sz = huff->table.index.size();
             f.Write(&sz, sizeof(size_t));
             for each (auto & p in huff->table.index)
@@ -335,8 +336,9 @@ std::unique_ptr < CBitmap > CJpegDlg::LoadImg()
         case model::img_type::rle:
         case model::img_type::jpeg:
         {
-            model::rle_data rle;
+            model::jpeg_data rle;
             rle.header = header;
+            if (t == model::img_type::jpeg) f.Read(&rle.quality, sizeof(double));
             size_t sz;
             f.Read(&sz, sizeof(size_t));
             rle.data.resize(sz);
@@ -355,8 +357,10 @@ std::unique_ptr < CBitmap > CJpegDlg::LoadImg()
         case model::img_type::jpeg_huff:
         {
             model::huffman_data huff;
+            model::jpeg_data rle;
             huff.header = header;
             size_t sz;
+            if (t == model::img_type::jpeg_huff) f.Read(&rle.quality, sizeof(double));
             f.Read(&sz, sizeof(size_t));
             huff.table.min_bits = 0xff;
             for (size_t i = 0; i < sz; ++i)
@@ -371,7 +375,6 @@ std::unique_ptr < CBitmap > CJpegDlg::LoadImg()
             huff.size_bits = sz;
             huff.data.resize((sz + 7) / 8);
             f.Read(huff.data.data(), (sz + 7) / 8);
-            model::rle_data rle;
             model::huffman_decompress(huff, rle);
             auto r = std::make_unique < CBitmap > ();
             model::bitmap bmp;
@@ -420,4 +423,40 @@ void CJpegDlg::OnBnClickedButton12()
     auto r = LoadImg();
     CImgDialog d(this, r.get());
     d.DoModal();
+}
+
+
+void CJpegDlg::OnHScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar)
+{
+    CompressImg(m_quality.GetPos() / 100.);
+
+    CSimulationDialog::OnHScroll(nSBCode, nPos, pScrollBar);
+}
+
+void CJpegDlg::CompressImg(double q)
+{
+    m_data.src.bmp.jpeg_compress(m_data.rdst, q);
+    m_data.dst.bmp.jpeg_decompress(m_data.rdst);
+    m_data.dst.bmp.to_cbitmap(m_data.dst.cbmp);
+    m_dstImg.RedrawWindow();
+    CString fmt; fmt.Format(TEXT("%d"), m_data.rdst.size());
+    m_dstSize[0].SetWindowText(fmt);
+    fmt.Format(TEXT("%lf"), (double) m_data.rdst.size() / m_data.src.bmp.size() * 100);
+    m_ratio[0].SetWindowText(fmt);
+
+    double dist = 0;
+    for (size_t i = 0; i < m_data.src.bmp.header.h; ++i)
+    for (size_t j = 0; j < m_data.src.bmp.header.w; ++j)
+    {
+        auto & p1 = m_data.src.bmp.pixels[i][j];
+        auto & p2 = m_data.dst.bmp.pixels[i][j];
+        double s1 = (double)p1.r - (double)p2.r;
+        double s2 = (double)p1.g - (double)p2.g;
+        double s3 = (double)p1.b - (double)p2.b;
+        dist += (s1 * s1 + s2 * s2 + s3 * s3) / 255 / 255;
+    }
+    dist /= m_data.src.bmp.header.h * m_data.src.bmp.header.w;
+
+    fmt.Format(TEXT("%lf"), std::sqrt(dist));
+    m_msqDistance.SetWindowText(fmt);
 }
