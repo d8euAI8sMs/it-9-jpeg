@@ -224,7 +224,8 @@ namespace model
         m8 r;
         for (size_t i = 0; i < 8; ++i)
         for (size_t j = 0; j < 8; ++j)
-            r.m[i][j] = src.m[i][j] * (1 + k * (1 - 2 * q) * (i + j) / 14);
+            r.m[i][j] = src.m[i][j] * (31 - 60 * q);
+        r.m[0][0] = src.m[0][0];
         return r;
     }
 
